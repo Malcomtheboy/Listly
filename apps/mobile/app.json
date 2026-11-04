@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Listly",
+    "slug": "listly",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "listly",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.listly.app"
+    },
+    "android": {
+      "package": "com.listly.app",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Listly bruker bildene dine for å lese skjermbilder av boligannonser du velger selv."
+        }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsWebPageWithMaxCount": 1,
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsImageWithMaxCount": 1
+          },
+          "androidIntentFilters": ["text/*", "image/*"]
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
