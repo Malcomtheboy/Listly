@@ -1,19 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useState, type ComponentProps } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PrimaryButton, SecondaryButton } from '@/components/buttons';
-import { ScoreBadge } from '@/components/score-badge';
+import { SavedCard } from '@/components/saved-card';
+import { CATEGORIES, CATEGORY_ORDER } from '@/categories';
 import { setPendingInput } from '@/services/pending';
 import { listSaved } from '@/services/saved';
-import type { SavedAnalysis } from '@/services/types';
-import { formatMoney, shadow, timeAgo, useTheme, VERDICT_LABEL, verdictColors, type Theme } from '@/theme';
+import type { Category, SavedAnalysis } from '@/services/types';
+import { shadow, useTheme } from '@/theme';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
+
+const CATEGORY_KEY = 'listly.category';
+const RECENT = 3;
 
 const STEPS: { icon: IconName; title: string; text: string }[] = [
   { icon: 'clipboard-outline', title: 'Lim inn', text: 'Lenke, tekst eller skjermbilde' },
@@ -21,21 +26,31 @@ const STEPS: { icon: IconName; title: string; text: string }[] = [
   { icon: 'shield-checkmark-outline', title: 'Du vet mer', text: 'Faresignaler og neste steg' },
 ];
 
-const SCAM_TIPS: { icon: IconName; title: string; text: string }[] = [
-  { icon: 'airplane-outline', title: 'Utleier er «i utlandet»', text: 'Vil sende nøklene i posten etter at du har betalt.' },
-  { icon: 'cash-outline', title: 'Betal før visning', text: 'Ekte utleiere lar deg se boligen før du betaler noe.' },
-  { icon: 'pricetag-outline', title: 'For god til å være sann', text: 'Mye lavere pris enn resten av området er et rødt flagg.' },
-  { icon: 'card-outline', title: 'Depositum til privat konto', text: 'I Norge skal depositum stå på egen depositumskonto.' },
-];
-
-export default function Home() {
+export default function CheckScreen() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [category, setCategory] = useState<Category>('rental');
   const [value, setValue] = useState('');
   const [focused, setFocused] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedAnalysis[]>([]);
+  const cat = CATEGORIES[category];
+
+  // Remember what the user checks most, so a car hunter does not have to switch every time.
+  useEffect(() => {
+    AsyncStorage.getItem(CATEGORY_KEY)
+      .then((c) => {
+        if (c === 'rental' || c === 'car') setCategory(c);
+      })
+      .catch(() => {});
+  }, []);
+
+  const pickCategory = (c: Category) => {
+    setCategory(c);
+    setError(null);
+    AsyncStorage.setItem(CATEGORY_KEY, c).catch(() => {});
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -50,7 +65,7 @@ export default function Home() {
       return;
     }
     setError(null);
-    setPendingInput(/^https?:\/\/\S+$/.test(input) ? { url: input } : { text: input });
+    setPendingInput(/^https?:\/\/\S+$/.test(input) ? { url: input, category } : { text: input, category });
     setValue('');
     router.push('/analyze');
   };
@@ -80,24 +95,46 @@ export default function Home() {
       return;
     }
     setError(null);
-    setPendingInput({ image: { base64, mimeType: asset.mimeType ?? 'image/jpeg' } });
+    setPendingInput({ image: { base64, mimeType: asset.mimeType ?? 'image/jpeg' }, category });
     router.push('/analyze');
   };
 
+  const recent = saved.slice(0, RECENT);
+
   return (
-    <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }} keyboardShouldPersistTaps="handled">
+    <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
       <LinearGradient colors={t.brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, { paddingTop: insets.top + 20 }]}>
         <View style={styles.inner}>
           <View style={styles.logoRow}>
             <View style={styles.logo}>
-              <Ionicons name="home" size={18} color="#4C3FE0" />
+              <Ionicons name="shield-checkmark" size={18} color="#4C3FE0" />
             </View>
             <Text style={styles.wordmark}>Listly</Text>
           </View>
-          <Text style={styles.headline}>Er leieannonsen ekte?</Text>
-          <Text style={styles.subhead}>Sjekk annonsen før du betaler noe. Vi finner faresignalene du lett overser.</Text>
+
+          <View style={styles.segment} accessibilityRole="tablist">
+            {CATEGORY_ORDER.map((key) => {
+              const c = CATEGORIES[key];
+              const active = key === category;
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => pickCategory(key)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  style={[styles.segmentItem, active && styles.segmentActive]}
+                >
+                  <Ionicons name={c.icon} size={17} color={active ? '#4C3FE0' : '#FFFFFF'} />
+                  <Text style={[styles.segmentText, { color: active ? '#4C3FE0' : '#FFFFFF' }]}>{c.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.headline}>{cat.headline}</Text>
+          <Text style={styles.subhead}>{cat.subhead}</Text>
           <View style={styles.chips}>
-            {['Finn', 'Hybel', 'Facebook', 'Rightmove'].map((name) => (
+            {cat.sites.map((name) => (
               <View key={name} style={styles.chip}>
                 <Text style={styles.chipText}>{name}</Text>
               </View>
@@ -118,7 +155,7 @@ export default function Home() {
               }}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
-              placeholder="Lim inn lenke eller annonsetekst…"
+              placeholder={cat.placeholder}
               placeholderTextColor={t.faint}
               multiline
               style={[styles.input, { color: t.text }]}
@@ -142,7 +179,7 @@ export default function Home() {
             </View>
           )}
 
-          <PrimaryButton label="Sjekk annonsen" icon="shield-checkmark" onPress={submit} />
+          <PrimaryButton label={category === 'car' ? 'Sjekk bilen' : 'Sjekk annonsen'} icon="shield-checkmark" onPress={submit} />
 
           <View style={styles.orRow}>
             <View style={[styles.orLine, { backgroundColor: t.border }]} />
@@ -168,95 +205,53 @@ export default function Home() {
           ))}
         </View>
 
-        <View style={styles.sectionHead}>
-          <Text style={[styles.section, { color: t.text }]}>Dine sjekker</Text>
-          {saved.length > 0 && <Text style={[styles.count, { color: t.muted }]}>{saved.length}</Text>}
-        </View>
-
-        {saved.length === 0 ? (
-          <View style={[styles.empty, { backgroundColor: t.card, borderColor: t.border }]}>
-            <View style={[styles.emptyIcon, { backgroundColor: t.brandSoft }]}>
-              <Ionicons name="search" size={26} color={t.brand} />
+        {recent.length > 0 && (
+          <>
+            <View style={styles.sectionHead}>
+              <Text style={[styles.section, { color: t.text }]}>Siste sjekker</Text>
+              {saved.length > RECENT && (
+                <Pressable onPress={() => router.push('/history')} hitSlop={8} accessibilityRole="link">
+                  <Text style={[styles.seeAll, { color: t.brand }]}>Se alle ({saved.length})</Text>
+                </Pressable>
+              )}
             </View>
-            <Text style={[styles.emptyTitle, { color: t.text }]}>Ingen annonser sjekket ennå</Text>
-            <Text style={[styles.emptyText, { color: t.muted }]}>Annonsene du sjekker lagres her, så du kan sammenligne dem senere.</Text>
-          </View>
-        ) : (
-          <View style={{ gap: 10 }}>
-            {saved.map((a) => (
-              <SavedCard key={a.id} a={a} t={t} onPress={() => router.push({ pathname: '/analysis/[id]', params: { id: a.id } })} />
-            ))}
-          </View>
+            <View style={{ gap: 10 }}>
+              {recent.map((a) => (
+                <SavedCard key={a.id} a={a} onPress={() => router.push({ pathname: '/analysis/[id]', params: { id: a.id } })} />
+              ))}
+            </View>
+          </>
         )}
 
-        <Text style={[styles.section, { color: t.text, marginTop: 28 }]}>Kjenn igjen svindel</Text>
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tipsRow}>
-        {SCAM_TIPS.map((tip) => (
-          <View key={tip.title} style={[styles.tipCard, { backgroundColor: t.card, borderColor: t.border }]}>
-            <View style={[styles.tipIcon, { backgroundColor: t.highBg }]}>
-              <Ionicons name={tip.icon} size={18} color={t.high} />
-            </View>
-            <Text style={[styles.tipTitle, { color: t.text }]}>{tip.title}</Text>
-            <Text style={[styles.tipText, { color: t.muted }]}>{tip.text}</Text>
+        <Pressable
+          onPress={() => router.push('/learn')}
+          accessibilityRole="link"
+          style={({ pressed }) => [styles.learnCard, { backgroundColor: t.card, transform: [{ scale: pressed ? 0.985 : 1 }] }, shadow(t)]}
+        >
+          <View style={[styles.learnIcon, { backgroundColor: t.highBg }]}>
+            <Ionicons name="school" size={22} color={t.high} />
           </View>
-        ))}
-      </ScrollView>
-
-      <View style={styles.inner}>
-        <View style={[styles.shareHint, { backgroundColor: t.cardAlt }]}>
-          <Ionicons name="share-outline" size={18} color={t.brand} />
-          <Text style={[styles.shareHintText, { color: t.muted }]}>
-            <Text style={{ color: t.text, fontWeight: '700' }}>Tips: </Text>
-            Trykk «Del» i Finn-appen eller nettleseren og velg Listly. Da slipper du å kopiere.
-          </Text>
-        </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[styles.learnTitle, { color: t.text }]}>Kjenn igjen svindel</Text>
+            <Text style={[styles.learnText, { color: t.muted }]}>De vanligste triksene for {cat.label.toLowerCase()}, forklart på ett minutt.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={t.faint} />
+        </Pressable>
       </View>
     </ScrollView>
-  );
-}
-
-function SavedCard({ a, t, onPress }: { a: SavedAnalysis; t: Theme; onPress: () => void }) {
-  const vc = verdictColors(t, a.verdict);
-  const price = formatMoney(a.facts.price, a.facts.currency);
-  const meta = [a.facts.city, price && `${price}/mnd`].filter(Boolean).join(' · ');
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.savedCard, { backgroundColor: t.card, transform: [{ scale: pressed ? 0.985 : 1 }] }, shadow(t)]}
-    >
-      <ScoreBadge score={a.score} verdict={a.verdict} size={52} />
-      <View style={{ flex: 1, gap: 4 }}>
-        <Text style={[styles.savedTitle, { color: t.text }]} numberOfLines={1}>
-          {a.facts.title ?? a.facts.address ?? 'Boligannonse'}
-        </Text>
-        {!!meta && (
-          <Text style={[styles.savedMeta, { color: t.muted }]} numberOfLines={1}>
-            {meta}
-          </Text>
-        )}
-        <View style={styles.savedFoot}>
-          <View style={[styles.verdictChip, { backgroundColor: vc.bg }]}>
-            <Text style={[styles.verdictChipText, { color: vc.fg }]}>{VERDICT_LABEL[a.verdict]}</Text>
-          </View>
-          <Text style={[styles.savedTime, { color: t.faint }]} numberOfLines={1}>
-            {timeAgo(a.analyzedAt)}
-          </Text>
-        </View>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={t.faint} />
-    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   inner: { paddingHorizontal: 16, maxWidth: 640, width: '100%', alignSelf: 'center' },
   hero: { paddingBottom: 84, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 22 },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 },
   logo: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   wordmark: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
+  segment: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 999, padding: 4, alignSelf: 'flex-start', marginBottom: 20 },
+  segmentItem: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 999 },
+  segmentActive: { backgroundColor: '#FFFFFF' },
+  segmentText: { fontSize: 15, fontWeight: '700' },
   headline: { color: '#FFFFFF', fontSize: 32, fontWeight: '800', lineHeight: 38, letterSpacing: -0.8 },
   subhead: { color: 'rgba(255,255,255,0.85)', fontSize: 16, lineHeight: 23, marginTop: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 18 },
@@ -281,25 +276,11 @@ const styles = StyleSheet.create({
   stepNumText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
   stepTitle: { fontSize: 14, fontWeight: '700' },
   stepText: { fontSize: 12, textAlign: 'center', lineHeight: 16 },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 32, marginBottom: 12 },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 32, marginBottom: 12 },
   section: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  count: { fontSize: 15, fontWeight: '700' },
-  empty: { alignItems: 'center', padding: 28, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', gap: 6 },
-  emptyIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  emptyTitle: { fontSize: 16, fontWeight: '700' },
-  emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20, maxWidth: 280 },
-  savedCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 20 },
-  savedTitle: { fontSize: 16, fontWeight: '700' },
-  savedMeta: { fontSize: 14 },
-  savedFoot: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 4, marginTop: 2 },
-  verdictChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
-  verdictChipText: { fontSize: 12, fontWeight: '700' },
-  savedTime: { fontSize: 12 },
-  tipsRow: { paddingHorizontal: 16, gap: 10, paddingTop: 12, paddingBottom: 4 },
-  tipCard: { width: 200, padding: 14, borderRadius: 18, borderWidth: 1, gap: 6 },
-  tipIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
-  tipTitle: { fontSize: 14, fontWeight: '700' },
-  tipText: { fontSize: 13, lineHeight: 18 },
-  shareHint: { flexDirection: 'row', gap: 10, alignItems: 'center', padding: 14, borderRadius: 16, marginTop: 24 },
-  shareHintText: { fontSize: 13, lineHeight: 19, flex: 1 },
+  seeAll: { fontSize: 14, fontWeight: '700' },
+  learnCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 20, marginTop: 24 },
+  learnIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  learnTitle: { fontSize: 16, fontWeight: '700' },
+  learnText: { fontSize: 13, lineHeight: 18 },
 });

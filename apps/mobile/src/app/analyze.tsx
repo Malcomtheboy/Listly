@@ -14,7 +14,7 @@ const inFlight = new WeakMap<ListingInput, Promise<SavedAnalysis>>();
 
 // Shown one after another while we wait. They describe what the server really does,
 // but the timing is cosmetic: the last step stays active until the answer arrives.
-const STEPS = ['Leser annonsen', 'Henter ut pris, depositum og adresse', 'Ser etter kjente svindelmønstre', 'Regner ut risiko'];
+const STEPS = ['Leser annonsen', 'Henter ut pris og fakta', 'Ser etter kjente svindelmønstre', 'Regner ut risiko'];
 
 export default function Analyze() {
   const t = useTheme();

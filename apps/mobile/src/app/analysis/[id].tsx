@@ -6,6 +6,7 @@ import { Linking, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SecondaryButton } from '@/components/buttons';
 import { ScoreBadge } from '@/components/score-badge';
+import { CATEGORIES, listingTitle } from '@/categories';
 import { getSaved, removeSaved } from '@/services/saved';
 import type { Flag, SavedAnalysis, Severity } from '@/services/types';
 import {
@@ -35,14 +36,41 @@ const VERDICT_LINE = {
 // it is plain logic over the analysis, not something the AI decides.
 function nextSteps(a: SavedAnalysis): string[] {
   const steps: string[] = [];
-  const f = a.facts;
   if (a.verdict === 'high-risk') {
-    steps.push('Ikke send penger eller ID før du har møtt utleier og sett boligen.');
+    steps.push(
+      a.category === 'car'
+        ? 'Ikke send penger, heller ikke «forskudd» eller «frakt», før du har sett og prøvekjørt bilen.'
+        : 'Ikke send penger eller ID før du har møtt utleier og sett boligen.',
+    );
     steps.push('Søk opp bildene med Google Lens. Svindlere bruker ofte bilder fra andre annonser.');
     steps.push('Rapporter annonsen til nettstedet den ligger på.');
   } else {
-    steps.push('Be om visning og møt utleier ansikt til ansikt.');
+    steps.push(a.category === 'car' ? 'Se bilen og prøvekjør den før du avtaler noe.' : 'Be om visning og møt utleier ansikt til ansikt.');
   }
+
+  if (a.category === 'car') {
+    const f = a.facts;
+    const missing = [
+      f.price === null && 'pris',
+      f.regNumber === null && 'registreringsnummer',
+      f.mileageKm === null && 'kilometerstand',
+      f.year === null && 'årsmodell',
+    ].filter(Boolean) as string[];
+    if (missing.length) steps.push(`Spør selgeren om det som mangler: ${missing.join(', ')}.`);
+    steps.push(
+      f.regNumber
+        ? `Slå opp ${f.regNumber.toUpperCase()} hos Statens vegvesen og sjekk at modell og årgang stemmer med annonsen.`
+        : 'Sjekk registreringsnummeret hos Statens vegvesen: stemmer modell og årgang med annonsen?',
+    );
+    // Paperwork only matters once the listing looks real.
+    if (a.verdict !== 'high-risk') {
+      steps.push('Sjekk at bilen ikke har heftelser (gjeld) i Løsøreregisteret før du betaler.');
+      steps.push('Bruk en skriftlig kontrakt, for eksempel Statens vegvesens kjøpekontrakt, og betal gjennom en sikker løsning.');
+    }
+    return steps;
+  }
+
+  const f = a.facts;
   const missing = [f.price === null && 'pris', f.deposit === null && 'depositum', f.address === null && 'adresse', f.sizeM2 === null && 'størrelse'].filter(
     Boolean,
   ) as string[];
@@ -79,24 +107,50 @@ export default function AnalysisScreen() {
     );
   }
 
-  const { facts } = analysis;
-  const price = formatMoney(facts.price, facts.currency);
-  const deposit = formatMoney(facts.deposit, facts.currency);
+  const price = formatMoney(analysis.facts.price, analysis.facts.currency);
+  const priceUnit = analysis.category === 'rental' ? '/mnd' : '';
   const flags = ORDER.flatMap((s) => analysis.flags.filter((f) => f.severity === s));
+  const title = listingTitle(analysis);
 
-  const tiles: { icon: IconName; label: string; value: string | null }[] = [
-    { icon: 'cash-outline', label: 'Pris', value: price && `${price}/mnd` },
-    { icon: 'wallet-outline', label: 'Depositum', value: deposit },
-    { icon: 'resize-outline', label: 'Størrelse', value: facts.sizeM2 ? `${facts.sizeM2} m²` : null },
-    { icon: 'bed-outline', label: 'Rom', value: facts.rooms ? String(facts.rooms) : null },
-    { icon: 'calendar-outline', label: 'Ledig fra', value: facts.availableFrom },
-    { icon: 'globe-outline', label: 'Kilde', value: facts.platform },
-  ];
-  const location = [facts.address, facts.city].filter(Boolean).join(', ');
+  let tiles: { icon: IconName; label: string; value: string | null }[];
+  let location: string;
+  let infoRows: { icon: IconName; label: string; value: string }[];
+  if (analysis.category === 'car') {
+    const f = analysis.facts;
+    tiles = [
+      { icon: 'cash-outline', label: 'Pris', value: price },
+      { icon: 'calendar-outline', label: 'Årsmodell', value: f.year ? String(f.year) : null },
+      { icon: 'speedometer-outline', label: 'Kilometer', value: f.mileageKm !== null ? `${new Intl.NumberFormat('nb-NO').format(f.mileageKm)} km` : null },
+      { icon: 'card-outline', label: 'Regnr.', value: f.regNumber?.toUpperCase() ?? null },
+      { icon: 'flash-outline', label: 'Drivstoff', value: f.fuel },
+      { icon: 'cog-outline', label: 'Girkasse', value: f.gearbox },
+    ];
+    location = f.location ?? '';
+    infoRows = [
+      f.make || f.model ? { icon: 'car-sport-outline' as const, label: 'Bil', value: [f.make, f.model].filter(Boolean).join(' ') } : null,
+      f.seller ? { icon: 'person-outline' as const, label: 'Selger', value: f.seller } : null,
+      f.platform ? { icon: 'globe-outline' as const, label: 'Kilde', value: f.platform } : null,
+    ].filter((r) => r !== null);
+  } else {
+    const f = analysis.facts;
+    tiles = [
+      { icon: 'cash-outline', label: 'Pris', value: price && `${price}/mnd` },
+      { icon: 'wallet-outline', label: 'Depositum', value: formatMoney(f.deposit, f.currency) },
+      { icon: 'resize-outline', label: 'Størrelse', value: f.sizeM2 ? `${f.sizeM2} m²` : null },
+      { icon: 'bed-outline', label: 'Rom', value: f.rooms ? String(f.rooms) : null },
+      { icon: 'calendar-outline', label: 'Ledig fra', value: f.availableFrom },
+      { icon: 'globe-outline', label: 'Kilde', value: f.platform },
+    ];
+    location = [f.address, f.city].filter(Boolean).join(', ');
+    infoRows = [
+      f.billsIncluded.length ? { icon: 'flash-outline' as const, label: 'Inkludert', value: f.billsIncluded.join(', ') } : null,
+      f.contact ? { icon: 'person-outline' as const, label: 'Kontakt', value: f.contact } : null,
+    ].filter((r) => r !== null);
+  }
 
   const share = async () => {
     const lines = [
-      `Listly-sjekk: ${facts.title ?? 'Boligannonse'}`,
+      `Listly-sjekk: ${title}`,
       `${VERDICT_LABEL[analysis.verdict]} (${analysis.score}/100)`,
       ...flags.filter((f) => f.severity !== 'low').map((f) => `• ${f.title}`),
       analysis.sourceUrl ?? '',
@@ -139,19 +193,23 @@ export default function AnalysisScreen() {
 
       <View style={styles.inner}>
         <View style={[styles.listingCard, { backgroundColor: t.card }, shadow(t, 2)]}>
+          <View style={styles.catRow}>
+            <Ionicons name={CATEGORIES[analysis.category].icon} size={13} color={t.brand} />
+            <Text style={[styles.catText, { color: t.brand }]}>{CATEGORIES[analysis.category].label}</Text>
+          </View>
           <Text style={[styles.listingTitle, { color: t.text }]} numberOfLines={2}>
-            {facts.title ?? 'Boligannonse'}
+            {title}
           </Text>
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={15} color={location ? t.muted : t.high} />
             <Text style={[styles.location, { color: location ? t.muted : t.high }]} numberOfLines={1}>
-              {location || 'Adresse ikke oppgitt'}
+              {location || (analysis.category === 'car' ? 'Sted ikke oppgitt' : 'Adresse ikke oppgitt')}
             </Text>
           </View>
           {price && (
             <Text style={[styles.price, { color: t.text }]}>
               {price}
-              <Text style={[styles.priceUnit, { color: t.muted }]}> /mnd</Text>
+              {!!priceUnit && <Text style={[styles.priceUnit, { color: t.muted }]}> {priceUnit}</Text>}
             </Text>
           )}
           {!!analysis.summary && (
@@ -200,10 +258,11 @@ export default function AnalysisScreen() {
             </View>
           ))}
         </View>
-        {(facts.billsIncluded.length > 0 || facts.contact) && (
+        {infoRows.length > 0 && (
           <View style={[styles.card, { backgroundColor: t.card, marginTop: 10 }, shadow(t)]}>
-            {facts.billsIncluded.length > 0 && <InfoRow t={t} icon="flash-outline" label="Inkludert" value={facts.billsIncluded.join(', ')} />}
-            {facts.contact && <InfoRow t={t} icon="person-outline" label="Kontakt" value={facts.contact} />}
+            {infoRows.map((r) => (
+              <InfoRow key={r.label} t={t} icon={r.icon} label={r.label} value={r.value} />
+            ))}
           </View>
         )}
 
@@ -217,7 +276,9 @@ export default function AnalysisScreen() {
         <View style={[styles.disclaimer, { backgroundColor: t.cardAlt }]}>
           <Ionicons name="information-circle-outline" size={18} color={t.muted} />
           <Text style={[styles.disclaimerText, { color: t.muted }]}>
-            Listly viser faresignaler, ikke en garanti. Møt alltid utleier, se boligen og skriv kontrakt før du betaler noe.
+            {analysis.category === 'car'
+              ? 'Listly viser faresignaler, ikke en garanti. Se og prøvekjør alltid bilen og skriv kontrakt før du betaler noe.'
+              : 'Listly viser faresignaler, ikke en garanti. Møt alltid utleier, se boligen og skriv kontrakt før du betaler noe.'}
           </Text>
         </View>
 
@@ -301,6 +362,8 @@ const styles = StyleSheet.create({
   verdictText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   heroLine: { color: 'rgba(255,255,255,0.92)', fontSize: 15, lineHeight: 22, textAlign: 'center', maxWidth: 320 },
   listingCard: { marginTop: -40, borderRadius: 24, padding: 18, gap: 6 },
+  catRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  catText: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
   listingTitle: { fontSize: 19, fontWeight: '800', letterSpacing: -0.3, lineHeight: 25 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   location: { fontSize: 14, flex: 1 },

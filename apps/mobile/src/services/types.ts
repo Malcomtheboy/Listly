@@ -8,7 +8,9 @@ export type Flag = {
   source: 'rule' | 'ai';
 };
 
-export type ListingFacts = {
+export type Category = 'rental' | 'car';
+
+export type RentalFacts = {
   title: string | null;
   price: number | null;
   currency: string | null;
@@ -23,10 +25,25 @@ export type ListingFacts = {
   platform: string | null;
 };
 
+export type CarFacts = {
+  title: string | null;
+  price: number | null;
+  currency: string | null;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  mileageKm: number | null;
+  regNumber: string | null;
+  fuel: string | null;
+  gearbox: string | null;
+  location: string | null;
+  seller: string | null;
+  platform: string | null;
+};
+
 export type Verdict = 'looks-ok' | 'check-carefully' | 'high-risk';
 
-export type Analysis = {
-  facts: ListingFacts;
+type AnalysisBase = {
   flags: Flag[];
   score: number;
   verdict: Verdict;
@@ -36,6 +53,9 @@ export type Analysis = {
   analyzedAt: string;
 };
 
+export type Analysis = AnalysisBase & ({ category: 'rental'; facts: RentalFacts } | { category: 'car'; facts: CarFacts });
+
 export type SavedAnalysis = Analysis & { id: string };
 
-export type ListingInput = { url?: string; text?: string; image?: { base64: string; mimeType: string } };
+// No category = let the server guess (used by the share sheet).
+export type ListingInput = { url?: string; text?: string; image?: { base64: string; mimeType: string }; category?: Category };

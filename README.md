@@ -1,6 +1,6 @@
 # Listly
 
-Sjekk en leieannonse for faresignaler før du betaler noe. Brukeren tar med annonsen selv (lenke, tekst, skjermbilde eller «Del → Listly»), så appen fungerer på Finn, Hybel, Facebook-grupper og alt annet uten API-avtaler eller scraping.
+Sjekk en leieannonse eller bruktbilannonse for faresignaler før du betaler noe. Brukeren tar med annonsen selv (lenke, tekst, skjermbilde eller «Del → Listly»), så appen fungerer på Finn, Hybel, Facebook-grupper og alt annet uten API-avtaler eller scraping.
 
 Prototype. Norge først (norsk UI, husleieloven-regler), men analysen fungerer på annonser fra andre land også.
 
@@ -28,6 +28,14 @@ Delemenyen er en native share extension (`expo-share-intent`), så den finnes **
 cd Listly/apps/mobile && npx expo install expo-dev-client && npx expo run:android   # eller run:ios på Mac
 ```
 
+## Kategorier og faner
+
+Appen har fire faner: **Sjekk** (velg Bolig eller Bil, lim inn eller last opp), **Historikk** (alle sjekker, filtrert per kategori), **Lær** (svindeltriks per kategori og hva du gjør hvis du har betalt) og **Profil** (personvern og sletting av historikk).
+
+Kategorien sendes med til API-et (`category: "rental" | "car"`). Kommer annonsen fra delemenyen uten kategori, gjetter `detectCategory` ut fra lenken (finn.no/mobility, hybel.no …) og ordene i teksten. Hver kategori har eget faktaskjema for AI-en (`extract.ts`) og egne regler (`red-flags.ts`); regler som gjelder alt (Western Union, hastverk, kun e-post) deles.
+
+Ny kategori = nytt faktaskjema + regelsett i API-et, og en oppføring i `src/categories.ts` i appen.
+
 ## Hvordan det henger sammen
 
 ```
@@ -54,4 +62,6 @@ Faste regler kjører alltid, uansett hva AI-en svarer, slik at kjente svindelmø
 - **Markedspris-sjekk** mot SSB-leiestatistikk (er prisen mistenkelig lav for området?).
 - **Omvendt bildesøk** av annonsebildene (stjålne bilder er det sterkeste svindelsignalet).
 - **Sjekk av adresse** mot Kartverket.
+- **Oppslag på registreringsnummer** hos Statens vegvesen (krever API-nøkkel) og **heftelser** i Løsøreregisteret. Nå får brukeren bare beskjed om å sjekke dette selv.
+- **Flere kategorier**: ting fra Finn Torget/Marketplace, billetter.
 - **Betaling** (boligjakt-pass i stedet for abonnement), **ikoner/splash** og **sammenligning** av annonser.

@@ -6,8 +6,8 @@ import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import { extractListing, isGeminiConfigured } from "./extract.js";
 import { fetchListing, UserError } from "./fetch-listing.js";
-import { ruleFlags, scoreFlags } from "./red-flags.js";
-import type { Analysis } from "./types.js";
+import { detectCategory, ruleFlags, scoreFlags } from "./red-flags.js";
+import { isCategory, type Analysis, type Flag } from "./types.js";
 
 dns.setDefaultResultOrder("ipv4first");
 dotenv.config();
@@ -34,10 +34,11 @@ app.get("/api/health", (_req, res) => {
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic"]);
 
 app.post("/api/analyze", async (req, res) => {
-  const { url, text, image } = (req.body ?? {}) as {
+  const { url, text, image, category: requested } = (req.body ?? {}) as {
     url?: unknown;
     text?: unknown;
     image?: { base64?: unknown; mimeType?: unknown };
+    category?: unknown;
   };
 
   try {
@@ -68,12 +69,20 @@ app.post("/api/analyze", async (req, res) => {
       return;
     }
 
-    const extraction = await extractListing({ text: listingText || undefined, image: imageInput });
-    const flags = [...ruleFlags(listingText, extraction.facts), ...extraction.flags];
+    // The app sends the category the user picked; the share sheet sends none, so guess.
+    const category = isCategory(requested) ? requested : detectCategory(listingText, sourceUrl ?? link);
+    const extraction = await extractListing({ text: listingText || undefined, image: imageInput }, category);
+    const rules: Flag[] =
+      extraction.category === "car"
+        ? ruleFlags(listingText, "car", extraction.facts)
+        : ruleFlags(listingText, "rental", extraction.facts);
+    const flags = [...rules, ...extraction.flags];
     const { score, verdict } = scoreFlags(flags);
 
     const analysis: Analysis = {
-      facts: extraction.facts,
+      ...(extraction.category === "car"
+        ? { category: "car" as const, facts: extraction.facts }
+        : { category: "rental" as const, facts: extraction.facts }),
       flags,
       score,
       verdict,
