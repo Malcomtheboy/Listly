@@ -6,6 +6,22 @@ Lim inn en lenke, teksten eller et skjermbilde fra Finn, Hybel, Facebook eller h
 
 > **English:** Listly is a React Native app that checks rental and used-car listings for scam signals. An AI model extracts structured facts from a pasted link, text or screenshot; a deterministic rule engine catches well-known scam patterns; the app shows a risk score, red flags and next steps. Norwegian UI, prototype stage.
 
+<p align="center">
+  <img src="docs/screenshots/sjekk.jpg" width="220" alt="Sjekk-fanen med valg mellom bolig og bil" />
+  &nbsp;
+  <img src="docs/screenshots/resultat-bil.jpg" width="220" alt="Resultat for en svindelannonse for bil: 0 av 100, høy risiko" />
+  &nbsp;
+  <img src="docs/screenshots/resultat-ok.jpg" width="220" alt="Resultat for en vanlig leieannonse: 100 av 100, ingen store faresignaler" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/laster.jpg" width="220" alt="Lasteskjerm med stegene i analysen" />
+  &nbsp;
+  <img src="docs/screenshots/historikk.jpg" width="220" alt="Historikk med statistikk og filter per kategori" />
+  &nbsp;
+  <img src="docs/screenshots/laer.jpg" width="220" alt="Lær-fanen med vanlige svindeltriks" />
+</p>
+
 ## Funksjoner
 
 - **To kategorier:** bolig og bil, med egne regler, fakta og råd for hver
