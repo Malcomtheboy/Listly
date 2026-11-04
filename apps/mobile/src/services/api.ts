@@ -1,8 +1,8 @@
 import Constants from 'expo-constants';
 import type { Analysis, ListingInput } from './types';
 
-// Same host detection as Rihla: in development the API runs on the same machine
-// as the Expo dev server, so reuse its host (works on a phone on the same Wi-Fi).
+// In development the API runs on the same machine as the Expo dev server, so
+// reuse its host (works on a phone on the same Wi-Fi).
 function resolveApiUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
   if (envUrl) return envUrl;

@@ -2,8 +2,8 @@ import { ApiError, GoogleGenAI, Type } from "@google/genai";
 import type { Part, Schema } from "@google/genai";
 import type { CarFacts, Category, Flag, RentalFacts } from "./types.js";
 
-// Same model as Rihla: the lite tier is plenty for pulling facts out of one listing,
-// and it reads screenshots too.
+// The lite tier is plenty for pulling facts out of one listing, and it reads
+// screenshots too. An alias, so it does not need bumping as new versions ship.
 const MODEL = "gemini-flash-lite-latest";
 
 const WHAT: Record<Category, string> = {
