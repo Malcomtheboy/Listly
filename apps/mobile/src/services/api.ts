@@ -31,8 +31,13 @@ export async function analyzeListing(input: ListingInput): Promise<Analysis> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
+      // The server gives up on the AI after two ~12 s attempts; never spin longer than that.
+      signal: AbortSignal.timeout(35_000),
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && e.name === 'TimeoutError') {
+      throw new Error('Det tok for lang tid å få svar. Prøv igjen om litt.');
+    }
     throw new Error('Fikk ikke kontakt med serveren. Sjekk nettet og prøv igjen.');
   }
 

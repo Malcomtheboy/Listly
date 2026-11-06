@@ -4,7 +4,7 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
-import { extractListing, isGeminiConfigured } from "./extract.js";
+import { AiUnavailableError, extractListing, isGeminiConfigured } from "./extract.js";
 import { fetchListing, UserError } from "./fetch-listing.js";
 import { detectCategory, ruleFlags, scoreFlags } from "./red-flags.js";
 import { isCategory, type Analysis, type Flag } from "./types.js";
@@ -95,6 +95,11 @@ app.post("/api/analyze", async (req, res) => {
   } catch (error) {
     if (error instanceof UserError) {
       res.status(422).json({ error: error.message });
+      return;
+    }
+    if (error instanceof AiUnavailableError) {
+      console.warn("analyze: AI unavailable", error.cause);
+      res.status(503).json({ error: "AI-tjenesten er overbelastet akkurat nå. Prøv igjen om et minutt." });
       return;
     }
     console.error("analyze failed", error);

@@ -118,13 +118,25 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// A normal answer takes about 2 s. When Gemini is overloaded a request can hang
+// for minutes instead of failing, so give up on an attempt well before the user does.
+const ATTEMPT_TIMEOUT_MS = 12_000;
+
+// Gemini is overloaded or not answering; worth telling the user to try again shortly.
+export class AiUnavailableError extends Error {}
+
+function isRetryable(error: unknown): boolean {
+  if (error instanceof ApiError) return error.status === 503 || error.status === 429;
+  return error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+}
+
 export async function extractListing(input: ListingInput, category: Category): Promise<Extraction> {
   const parts: Part[] = [];
   if (input.text) parts.push({ text: `LISTING:\n"""\n${input.text}\n"""` });
   if (input.image) parts.push({ inlineData: { data: input.image.base64, mimeType: input.image.mimeType } });
 
   let lastError: unknown;
-  // The free tier returns 503 "high demand" fairly often; one retry usually fixes it.
+  // The free tier returns 503 "high demand" or stalls fairly often; one retry usually fixes it.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const response = await getClient().models.generateContent({
@@ -135,6 +147,7 @@ export async function extractListing(input: ListingInput, category: Category): P
           responseMimeType: "application/json",
           responseSchema: schema(category),
           maxOutputTokens: 1500,
+          abortSignal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
         },
       });
       const parsed = JSON.parse(response.text ?? "") as {
@@ -149,9 +162,9 @@ export async function extractListing(input: ListingInput, category: Category): P
       return { category, facts: { ...facts, billsIncluded: facts.billsIncluded ?? [] }, flags, summary };
     } catch (error) {
       lastError = error;
-      const retryable = error instanceof ApiError && error.status === 503;
-      if (!retryable || attempt === 1) break;
-      await sleep(1500);
+      if (!isRetryable(error)) break;
+      if (attempt === 1) throw new AiUnavailableError("Gemini did not answer", { cause: error });
+      await sleep(1000);
     }
   }
   throw lastError;

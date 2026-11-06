@@ -31,7 +31,7 @@ export default function Analyze() {
       ]),
     );
     loop.start();
-    const timer = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 4000);
+    const timer = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 900);
     return () => {
       loop.stop();
       clearInterval(timer);
@@ -92,7 +92,7 @@ export default function Analyze() {
         </Animated.View>
       </View>
       <Text style={[styles.title, { color: t.text }]}>Sjekker annonsen</Text>
-      <Text style={[styles.body, { color: t.muted }]}>Dette kan ta opptil et halvt minutt.</Text>
+      <Text style={[styles.body, { color: t.muted }]}>Dette tar vanligvis noen få sekunder.</Text>
 
       <View style={[styles.stepsCard, { backgroundColor: t.card }, shadow(t)]}>
         {STEPS.map((label, i) => {
